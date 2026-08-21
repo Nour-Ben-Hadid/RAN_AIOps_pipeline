@@ -58,7 +58,7 @@ def main():
         if len(s) == 0:
             print(f"{label:<26}{'--':>12}")
             continue
-        k, n = int(s.sum()), len(s) # k = nb de bonnes réponses, n = nb total de tickets testés
+        k, n = int(s.sum()), len(s)   # k = bonnes reponses, n = tickets testes
         ci = stats.binomtest(k, n).proportion_ci(method="wilson")
         print(f"{label:<26}{k/n:>12.3f}{f'[{ci.low:.3f}, {ci.high:.3f}]':>18}{n:>6}")
 

@@ -10,8 +10,7 @@ from commun import est_correct, TICKETS
 
 MODELE = "OrdalieTech/Solon-embeddings-large-0.1"
 
-# 4 phrases prototypes par categorie, en francais. Pas de prototype pour
-# INDETERMINE : l'abstention vient du seuil de similarite, pas d'un sens a regrouper.
+# 4 prototypes par categorie ; pas d'INDETERMINE : l'abstention vient du seuil
 PROTOTYPES = {
     "A_accessibilite": [
         "Je n'arrive pas du tout a me connecter, aucune connexion ne s'etablit.",
@@ -66,8 +65,7 @@ def seuil_optimal(sims, cats, attendu):
 
 
 def predire_cv(sims, cats, attendu, strate):
-    """seuil choisi par validation croisee (5 plis) : chaque prediction sort d'un pli
-    qui n'a pas servi a choisir le seuil qui l'a produite"""
+    """seuil choisi par validation croisee (5 plis), hors echantillon"""
     skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=0)
     preds = np.empty(len(sims), dtype=object)
     seuils = []
@@ -94,8 +92,6 @@ def main():
 
     modele = SentenceTransformer(MODELE, device="cpu")
 
-    # chaque plainte prend la categorie de son prototype le plus proche : une seule
-    # matrice de similarite, puis argmax global
     protos = [t for textes in PROTOTYPES.values() for t in textes]
     cats_protos = np.array(
         [cat for cat, textes in PROTOTYPES.items() for _ in textes])

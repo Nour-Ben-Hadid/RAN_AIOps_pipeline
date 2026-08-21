@@ -1,4 +1,38 @@
+# secrets
 .env
+
+# donnees et sorties (volumineuses / regenerables)
 data/
 reclamations/resultats/
 anomalies/resultats_anomalies/
+anomalies/resultats_anomalies_*/
+
+# python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+venv/
+.venv/
+
+# notebooks
+.ipynb_checkpoints/
+
+# latex (artefacts de compilation)
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.lof
+*.lot
+*.out
+*.synctex.gz
+*.toc
+rapport_complet.pdf
+
+# divers
+*.log
+.DS_Store
+Thumbs.db

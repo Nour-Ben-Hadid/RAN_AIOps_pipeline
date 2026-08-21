@@ -1,12 +1,12 @@
 import os
 import re
 import csv
-import sys
 import json
 import time
 import argparse
 import requests
 import pandas as pd
+from commun import cle_api, TICKETS
 
 CATEGORIES = {
     "A_accessibilite": "Le service ne s'etablit pas du tout : aucune connexion possible, "
@@ -98,23 +98,19 @@ def sauver_cache(chemin, cache):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--modele", default=MODELE)
-    ap.add_argument("--tickets", default="resultats/tickets_synthetiques.csv")
+    ap.add_argument("--tickets", default=TICKETS)
     ap.add_argument("--out", default="resultats/predictions_llm_api.csv")
     ap.add_argument("--cache", default="resultats/cache_llm.csv")
     ap.add_argument("--pause", type=float, default=6.5, help="secondes entre appels")
     args = ap.parse_args()
 
-    cle = os.environ.get("GEMINI_API_KEY")
-    if not cle:
-        sys.exit("Variable d'environnement GEMINI_API_KEY absente. "
-                 "Cree une cle gratuite puis : export GEMINI_API_KEY=...")
-
+    cle = cle_api()
     df = pd.read_csv(args.tickets)
     cache = charger_cache(args.cache)
     print(f"{args.modele} | {len(df)} tickets | {len(cache)} deja en cache")
 
     lignes, echecs = [], 0
-    for i, r in df.iterrows():
+    for _, r in df.iterrows():
         texte = r["texte_plainte"]
         if texte in cache:
             cat, conf = cache[texte]
@@ -145,7 +141,7 @@ def main():
             time.sleep(args.pause)
 
         lignes.append({"ticket_id": r["ticket_id"], "pred_llm": cat, "confiance": conf})
-       
+
     out = pd.DataFrame(lignes)
     out.to_csv(args.out, index=False)
     print(f"\n{len(out)} predictions -> {args.out}")
