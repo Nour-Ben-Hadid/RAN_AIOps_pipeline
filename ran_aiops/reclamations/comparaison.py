@@ -1,7 +1,8 @@
 import argparse
 import pandas as pd
 from scipy import stats
-from commun import est_correct, TICKETS
+from ran_aiops.chemins import COMPARAISON, PRED_EMBEDDINGS, PRED_LLM, TICKETS, prevoir
+from ran_aiops.commun.texte import est_correct
 
 
 def mcnemar(ok_a, ok_b, label_a, label_b):
@@ -20,9 +21,9 @@ def mcnemar(ok_a, ok_b, label_a, label_b):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--tickets", default=TICKETS)
-    ap.add_argument("--llm", default="resultats/predictions_llm_api.csv")
-    ap.add_argument("--embed", default="resultats/predictions_embeddings.csv")
-    ap.add_argument("--out", default="resultats/comparaison_predictions.csv")
+    ap.add_argument("--llm", default=PRED_LLM)
+    ap.add_argument("--embed", default=PRED_EMBEDDINGS)
+    ap.add_argument("--out", default=COMPARAISON)
     args = ap.parse_args()
 
     df = pd.read_csv(args.tickets)
@@ -41,7 +42,7 @@ def main():
     try:
         ev = ev.merge(pd.read_csv(args.llm)[["ticket_id", "pred_llm"]], on="ticket_id", how="left")
     except FileNotFoundError:
-        print(f"[!] {args.llm} absent -> lance d'abord classification_llm_api.py\n")
+        print(f"[!] {args.llm} absent -> lance d'abord python -m ran_aiops.reclamations.classification_llm\n")
         ev["pred_llm"] = None
 
     for m in ["embed", "llm"]:

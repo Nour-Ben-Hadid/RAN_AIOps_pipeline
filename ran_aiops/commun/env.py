@@ -1,14 +1,10 @@
+"""Acces aux secrets : chargement du .env et recuperation de la cle API."""
+
 import os
 import re
 import sys
 
-import pandas as pd
-
-TICKETS = "resultats/tickets_synthetiques.csv"
-PRED_LLM = "resultats/predictions_llm_api.csv"
-SEUIL_CONFIANCE = 0.85   # en dessous, la categorie du LLM n'est pas jugee fiable
-
-ENV = "../.env"
+from ran_aiops.chemins import ENV
 
 
 def charger_env(chemin=ENV):
@@ -33,16 +29,3 @@ def cle_api():
         sys.exit("GEMINI_API_KEY introuvable : ni dans l'environnement, ni dans le .env "
                  "a la racine du projet. Ajoute une ligne GEMINI_API_KEY=ta_cle dans .env")
     return cle
-
-
-def charger_tickets(tickets=TICKETS, llm=PRED_LLM, seuil=SEUIL_CONFIANCE):
-    """tickets + prediction LLM ; cat_eff = categorie du LLM si confiant, INDETERMINE sinon"""
-    df = pd.read_csv(tickets).merge(
-        pd.read_csv(llm)[["ticket_id", "pred_llm", "confiance"]], on="ticket_id", how="left")
-    df["cat_eff"] = df["pred_llm"].where(df["confiance"] >= seuil, "INDETERMINE")
-    return df
-
-
-def est_correct(pred, attendu):
-    """un ticket ambigu est juste si la prediction est l'une des 2 categories admises"""
-    return pred in str(attendu).split("|")

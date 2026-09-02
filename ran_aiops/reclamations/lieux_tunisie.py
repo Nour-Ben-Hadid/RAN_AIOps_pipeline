@@ -1,16 +1,13 @@
 import difflib
 import re
-import unicodedata
 from functools import cache
 
-FICHIER = "../data/lieux_tunisie.txt"
+from ran_aiops.chemins import LIEUX_TUNISIE
+from ran_aiops.commun.texte import normaliser
+
+FICHIER = LIEUX_TUNISIE
 SEUIL = 0.85          # en dessous, on prefere ne rien corriger
 VOIE = r"^(rue|avenue|route|impasse|boulevard|av\.|bd|rr|rn|rl|cite|residence)\b"
-
-
-def _norm(s):
-    s = unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode().lower()
-    return re.sub(r"[^a-z ]+", " ", s).strip()
 
 
 @cache
@@ -20,7 +17,7 @@ def _charger():
         for ligne in f:
             n = ligne.strip()
             if n:
-                index.setdefault(_norm(n), n)
+                index.setdefault(normaliser(n), n)
     return index
 
 
@@ -31,7 +28,7 @@ def corriger(adresse, seuil=SEUIL):
     sortie = []
     for part in str(adresse).split(","):
         part = part.strip()
-        cle = _norm(part)
+        cle = normaliser(part)
         if not cle or re.match(VOIE, part, re.I):
             sortie.append(part)
             continue

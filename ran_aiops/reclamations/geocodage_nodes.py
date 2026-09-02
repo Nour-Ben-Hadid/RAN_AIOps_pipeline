@@ -9,6 +9,8 @@ import pandas as pd
 from geopy.geocoders import Nominatim
 from geopy.extra.rate_limiter import RateLimiter
 
+from ran_aiops.chemins import CACHE_GEOCODAGE_NODES, DATA, KPI_TABLE, prevoir
+
 
 LANGUE = "fr"
 PREFIX = "B5G4G_"
@@ -71,10 +73,10 @@ def charger_nodes(kpi_path):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--kpi", default="../data/KPI Table(1).csv")
+    ap.add_argument("--kpi", default=KPI_TABLE)
     # jamais nodes_coordonnees.csv : c'est la source de verite, schema different
-    ap.add_argument("--out", default="../data/nodes_geocodage_brut.csv")
-    ap.add_argument("--cache", default="../data/geocode_cache.json")
+    ap.add_argument("--out", default=DATA / "nodes_geocodage_brut.csv")
+    ap.add_argument("--cache", default=CACHE_GEOCODAGE_NODES)
     args = ap.parse_args()
 
     nodes = charger_nodes(args.kpi)
@@ -124,7 +126,7 @@ def main():
             print(f"  {i+1}/{len(nodes)}...")
 
     out = pd.DataFrame(lignes)
-    out.to_csv(args.out, index=False, encoding="utf-8")
+    out.to_csv(prevoir(args.out), index=False, encoding="utf-8")
     n_ok = int(out["verifie"].sum())
     print(f"\nOK -> {args.out}")
     print(f"verifies OSM : {n_ok}/{len(out)}   replis centre : {len(out) - n_ok}")

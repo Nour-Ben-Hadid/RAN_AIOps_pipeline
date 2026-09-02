@@ -4,27 +4,19 @@ from functools import cache
 import numpy as np
 import pandas as pd
 
-from commun import charger_tickets, PRED_LLM, SEUIL_CONFIANCE, TICKETS
-from geocode_adresse import geocoder_adresse
+from ran_aiops.chemins import (ANOMALIES_JOURNALIERES, CELLULES_CHRONIQUES, JOINTURE,
+                               NODES_COORDS, PRED_LLM, TICKETS, prevoir)
+from ran_aiops.commun.kpi import CATEGORIE_PAR_KPI, familles_de
+from ran_aiops.commun.texte import normaliser
+from ran_aiops.commun.tickets import SEUIL_CONFIANCE, charger_tickets
+from ran_aiops.reclamations.geocodage import geocoder_lieu
 
-AJ_PATH = "../anomalies/resultats_anomalies/anomalies_journalieres.csv"
-CC_PATH = "../anomalies/resultats_anomalies/cellules_chroniques.csv"
-COORDS_PATH = "../data/nodes_coordonnees.csv"
+CHAMPS_LIEU = ["gouvernorat", "delegation", "localite", "adresse_libre", "code_postal"]
+
 
 K_NODES = 7
 RAYON_KM = 8.0   
 
-CATEGORIE_PAR_KPI = {
-    "Diff_Init_E-Rab_Establish_Succ_Rate (%)": "A_accessibilite",
-    "Diff_E-RAB_Retainability (%)": "B_retenabilite",
-    "SCG_Radio_Resource_Retainability_Act (%)": "B_retenabilite",
-    "SCG_Radio_Resource_Retainability_origin_gNb_Act (%)": "B_retenabilite",
-    "Diff_Cell_Mobility_Succ_Rate_LTE (%)": "C_mobilite",
-    "EN_DC_intra_sgNB_PSCell_Change_succ_rate (%)": "C_mobilite",
-    "EN_DC_inter_sgNB_PSCell_Change_succ_rate (%)": "C_mobilite",
-    "EN_DC_SETUP_succ_RATE_gNB (%)": "D_debit_5g",
-    "EN_DC_SETUP_succ_RATE_eNB (%)": "D_debit_5g",
-}
 
 def haversine(lat1, lon1, lat2, lon2):
     """distance en km ; accepte des scalaires ou des tableaux numpy"""
@@ -38,7 +30,7 @@ def haversine(lat1, lon1, lat2, lon2):
 
 @cache
 def charger_coords():
-    return pd.read_csv(COORDS_PATH)
+    return pd.read_csv(NODES_COORDS)
 
 
 def nodes_dans_rayon(lat, lon, rayon, k=K_NODES):    
@@ -51,21 +43,33 @@ def nodes_dans_rayon(lat, lon, rayon, k=K_NODES):
     return dict(zip(c["Node"].to_numpy()[ordre], d[ordre]))
 
 
-def position_ticket(ticket):    
-    adresse = ticket.get("adresse")
-    if adresse is None or pd.isna(adresse):
-        return None
-    return geocoder_adresse(adresse, ticket.get("code_postal"))
+def nodes_du_gouvernorat(gouvernorat):
+    """repli sans coordonnees : tous les nodes de la region, distance inconnue"""
+    c = charger_coords()
+    m = c["Region"].map(normaliser) == normaliser(gouvernorat)
+    return {n: float("nan") for n in c.loc[m, "Node"]}
+
+
+def candidats(ticket, rayon=RAYON_KM, k=K_NODES):
+    """({node: distance_km}, niveau de precision de la localisation)"""
+    champs = {c: (None if pd.isna(v := ticket.get(c)) else str(v)) for c in CHAMPS_LIEU}
+    if not champs["gouvernorat"]:
+        return {}, None
+
+    lat, lon, niveau = geocoder_lieu(**champs)
+    if niveau is None:
+        return nodes_du_gouvernorat(champs["gouvernorat"]), "gouvernorat"
+    return nodes_dans_rayon(lat, lon, rayon, k), niveau
 
 
 def charger_anomalies():
-    aj = pd.read_csv(AJ_PATH)    
+    aj = pd.read_csv(ANOMALIES_JOURNALIERES)    
     aj = aj.rename(columns={"EUtranCell Id": "cellule", "Region": "region", "Date": "date",
                             "kpi_principal": "kpi", "score_anomalie": "severite",
                             "score_if": "severite"})
     aj = aj[["Node", "cellule", "region", "date", "kpi", "severite", "kpis_en_cause"]]
 
-    cc = pd.read_csv(CC_PATH)
+    cc = pd.read_csv(CELLULES_CHRONIQUES)
     cc = cc.rename(columns={"EUtranCell Id": "cellule", "kpi_dominant": "kpi",
                             "taux_anormal": "severite"})
     cc = cc[["Node", "cellule", "region", "kpi", "severite", "kpis_en_cause"]]
@@ -81,8 +85,7 @@ def charger_anomalies():
         print(f"[!] {sans_coord} anomalies sans coordonnee de Node (ignorees par la distance)")
 
     # familles KPI de l'anomalie : deduites de TOUS les kpis_en_cause, pas juste le principal
-    anom["familles"] = anom["kpis_en_cause"].apply(
-        lambda s: {CATEGORIE_PAR_KPI.get(k.strip()) for k in str(s).split(";")} - {None})
+    anom["familles"] = anom["kpis_en_cause"].apply(familles_de)
     
     anom["fam_principale"] = anom["kpi"].map(CATEGORIE_PAR_KPI)    
     anom["chronique"] = anom["date"].isna()
@@ -93,28 +96,27 @@ def charger_anomalies():
 def matcher(ticket, anom, fenetre=0, rayon=RAYON_KM, k=K_NODES):
     cat = ticket["cat_eff"]
     if cat == "HORS_RESEAU":
-        return anom.iloc[0:0], {}  # pas un probleme reseau -> aucune jointure
+        return anom.iloc[0:0], {}, None  # pas un probleme reseau -> aucune jointure
 
-    pos = position_ticket(ticket)
-    if pos is None:
-        return anom.iloc[0:0], {}  
+    dist, niveau = candidats(ticket, rayon, k)
+    if not dist:
+        return anom.iloc[0:0], {}, niveau
 
-    dist = nodes_dans_rayon(pos[0], pos[1], rayon, k)
     m = anom[anom["Node"].isin(dist)]
     # chroniques (date NaT) toujours valides / journalieres dans la fenetre autour du ticket
     d = pd.to_datetime(ticket["date"])
     m = m[m["date"].isna() | ((m["date"] - d).abs().dt.days <= fenetre)]
     # INDETERMINE : on accepte toutes les familles 
-    if cat != "INDETERMINE":        
+    if cat != "INDETERMINE":
         m = m[m["familles"].apply(lambda fs: cat in fs).astype(bool)]
-    return m, dist
+    return m, dist, niveau
 
 
 def localiser_detail(ticket, anom, fenetre=0, rayon=RAYON_KM, k=K_NODES):
-    """(node, secteurs, kpis, distance_km) ; (None, [], [], None) si rien ne matche"""
-    m, dist = matcher(ticket, anom, fenetre, rayon, k)
+    """(node, secteurs, kpis, distance_km, niveau) ; node None si rien ne matche"""
+    m, dist, niveau = matcher(ticket, anom, fenetre, rayon, k)
     if not len(m):
-        return None, [], [], None
+        return None, [], [], None, niveau
 
     choix = m[~m["chronique"]] if (~m["chronique"]).any() else m
     cat = ticket["cat_eff"]
@@ -124,19 +126,16 @@ def localiser_detail(ticket, anom, fenetre=0, rayon=RAYON_KM, k=K_NODES):
                              ascending=[False, False, True]).iloc[0]["Node"]
     
     sous = m[m["Node"] == node]
+    d = dist[node]
     return (node,
             sorted(sous["cellule"].dropna().unique()),
             sorted(sous["kpi"].unique()),
-            round(float(dist[node]), 3))
-
-
-def localiser(ticket, anom, fenetre=0, rayon=RAYON_KM, k=K_NODES):
-    node, secteurs, kpis, _ = localiser_detail(ticket, anom, fenetre, rayon, k)
-    return node, secteurs, kpis
+            None if pd.isna(d) else round(float(d), 3),
+            niveau)
 
 
 def main():
-    global COORDS_PATH          
+    global NODES_COORDS          
     ap = argparse.ArgumentParser()
     ap.add_argument("--tickets", default=TICKETS)
     ap.add_argument("--llm", default=PRED_LLM)
@@ -145,22 +144,24 @@ def main():
                     help="rayon de recherche en km (rayon max si --k est utilise)")
     ap.add_argument("--k", type=int, default=K_NODES,
                     help="0 = rayon fixe ; k>0 = les k nodes les plus proches (adaptatif)")
-    ap.add_argument("--coords", default=COORDS_PATH)
+    ap.add_argument("--coords", default=NODES_COORDS)
     ap.add_argument("--seuil-confiance", type=float, default=SEUIL_CONFIANCE)
-    ap.add_argument("--out", default="resultats/jointure_anomalies.csv")
+    ap.add_argument("--out", default=JOINTURE)
     args = ap.parse_args()
 
-    COORDS_PATH = args.coords
+    NODES_COORDS = args.coords
     tickets = charger_tickets(args.tickets, args.llm, args.seuil_confiance)
     anom = charger_anomalies()
 
     lignes = []
-    for _, t in tickets.iterrows():
-        node, secteurs, kpis, dist = localiser_detail(t, anom, args.fenetre, args.rayon, args.k)
+    for t in tickets.to_dict("records"):
+        node, secteurs, kpis, dist, niveau = localiser_detail(
+            t, anom, args.fenetre, args.rayon, args.k)
         vn, vc = t.get("vrai_node"), t.get("vraie_cellule")
         lignes.append({
             "ticket_id": t["ticket_id"], "date": t["date"],
-            "adresse": t.get("adresse"), "distance_km": dist,
+            "gouvernorat": t.get("gouvernorat"), "precision": niveau,
+            "distance_km": dist,
             "categorie": t["pred_llm"],
             "anomalie_trouvee": node is not None,
             "node_retenu": node,
@@ -175,7 +176,7 @@ def main():
 
     res = pd.DataFrame(lignes)
     res["difficulte"] = tickets["difficulte"].values
-    res.to_csv(args.out, index=False)
+    res.to_csv(prevoir(args.out), index=False)
 
     mode = f"{args.k} plus proches (max {args.rayon} km)" if args.k else f"rayon fixe {args.rayon} km"
     print(f"{len(res)} tickets traites | {mode} | "
@@ -188,9 +189,11 @@ def main():
     print(f"  site restitue               : {evaluables['site_restitue'].sum()} ({evaluables['site_restitue'].mean():.1%})")
     print(f"  secteur restitue            : {evaluables['secteur_restitue'].sum()} ({evaluables['secteur_restitue'].mean():.1%})")
     print(f"  secteurs a inspecter / site : {nb_sect.mean():.1f} en moyenne")
-    tab = evaluables.groupby("difficulte")[["site_restitue", "secteur_restitue"]].mean().round(3)
-    tab["n"] = evaluables.groupby("difficulte").size()
-    print(tab.to_string())
+    for cle in ("difficulte", "precision"):
+        tab = evaluables.groupby(cle)[["site_restitue", "secteur_restitue"]].mean().round(3)
+        tab["n"] = evaluables.groupby(cle).size()
+        print(f"\npar {cle} :")
+        print(tab.to_string())
 
     # cout d'inspection sur TOUT le jeu, avec ou sans reference
     trouve = res["anomalie_trouvee"]

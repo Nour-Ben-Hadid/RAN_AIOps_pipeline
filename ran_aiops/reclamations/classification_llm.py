@@ -4,9 +4,11 @@ import csv
 import json
 import time
 import argparse
-import requests
 import pandas as pd
-from commun import cle_api, TICKETS
+import requests
+from ran_aiops.chemins import CACHE_CLASSIFICATION, PRED_LLM, TICKETS, prevoir
+from ran_aiops.commun.env import cle_api
+from ran_aiops.commun.gemini import MODELE, appeler_gemini
 
 CATEGORIES = {
     "A_accessibilite": "Le service ne s'etablit pas du tout : aucune connexion possible, "
@@ -39,27 +41,9 @@ Regles :
 Plainte : "{texte}"
 """
 
-MODELE = "gemini-flash-lite-latest"
-
-
 def construire_prompt(texte):
     cats = "\n".join(f"- {k} : {v}" for k, v in CATEGORIES.items())
     return PROMPT.format(categories=cats, texte=texte.replace('"', "'"))
-
-
-def appeler_gemini(prompt, cle, modele, temperature=0.0):
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{modele}:generateContent"
-    r = requests.post(
-        url,
-        headers={"x-goog-api-key": cle, "Content-Type": "application/json"},
-        json={
-            "contents": [{"parts": [{"text": prompt}]}],
-            "generationConfig": {"temperature": temperature, "maxOutputTokens": 2048},
-        },
-        timeout=60,
-    )
-    r.raise_for_status()
-    return r.json()["candidates"][0]["content"]["parts"][0]["text"]
 
 
 def extraire_json(brut):
@@ -99,8 +83,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--modele", default=MODELE)
     ap.add_argument("--tickets", default=TICKETS)
-    ap.add_argument("--out", default="resultats/predictions_llm_api.csv")
-    ap.add_argument("--cache", default="resultats/cache_llm.csv")
+    ap.add_argument("--out", default=PRED_LLM)
+    ap.add_argument("--cache", default=CACHE_CLASSIFICATION)
     ap.add_argument("--pause", type=float, default=6.5, help="secondes entre appels")
     args = ap.parse_args()
 

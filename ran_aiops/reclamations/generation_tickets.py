@@ -5,17 +5,20 @@ A relancer a chaque changement de detecteur : les tickets figent la verite terra
 import argparse
 import math
 import random
-import re
 
 import pandas as pd
 
-from geocode_adresse import adresse_depuis_coords
-from jointure_anomalies import (AJ_PATH, CC_PATH, COORDS_PATH,
-                                CATEGORIE_PAR_KPI, haversine)
+from ran_aiops.reclamations.geocodage import lieu_depuis_coords
+from ran_aiops.chemins import (ANOMALIES_JOURNALIERES, CELLULES_CHRONIQUES,
+                               NODES_COORDS, POSITIONS_REELLES, TICKETS, prevoir)
+from ran_aiops.commun.kpi import familles_de
+from ran_aiops.reclamations.jointure import CHAMPS_LIEU, haversine
 
 DECALAGE_MIN_KM, DECALAGE_MAX_KM = 0.2, 2.0
-VOIE = r"^(rue|avenue|route|impasse|boulevard|av\.|bd|rr\s?\d|rn\s?\d|rl\s?\d|cite|residence)"
-NIVEAUX = {2: "rue", 1: "lieu-dit", 0: "ville"}
+
+# du plus fin au plus grossier, avec le champ qui le caracterise
+NIVEAUX = ["rue", "localite", "delegation", "gouvernorat"]
+CHAMPS = ["adresse_libre", "localite", "delegation", "gouvernorat"]
 
 # proportions reprises du jeu d'origine, pour rester comparable
 PARTS = {"facile": 0.300, "ambigu": 0.286, "vague": 0.143,
@@ -130,17 +133,17 @@ TEXTES_HORS_RESEAU = [
 ]
 
 
-def familles_de(kpis):
-    return {CATEGORIE_PAR_KPI.get(k.strip()) for k in str(kpis).split(";")} - {None}
+def niveau_de(champs):
+    """niveau de precision atteint par les champs renseignes"""
+    return next((n for n, c in zip(NIVEAUX, CHAMPS) if champs.get(c)), None)
 
 
-def qualite(adresse):
-    if not adresse:
-        return 0
-    parts = [p.strip() for p in adresse.split(",")]
-    if re.match(VOIE, parts[0], re.I):
-        return 2
-    return 1 if len(parts) >= 5 else 0
+def degrader(champs, cible):
+    """vide les champs plus fins que le niveau vise (client qui ne sait pas)"""
+    i = NIVEAUX.index(cible)
+    sortie = {c: (champs.get(c) if j >= i else None) for j, c in enumerate(CHAMPS)}
+    sortie["code_postal"] = champs.get("code_postal") if i == 0 else None
+    return sortie
 
 
 def position_autour(lat, lon, rng):
@@ -152,31 +155,29 @@ def position_autour(lat, lon, rng):
             lon + d * math.sin(cap) / (111.32 * math.cos(math.radians(lat))))
 
 
-def banque_adresses(nodes, coords, rng, essais, sans_reseau):
-    """{node: [(lat, lon, adresse, qualite), ...]} -- une seule fois par node"""
+def banque_lieux(nodes, coords, rng, essais, sans_reseau):
+    """{node: [(lat, lon, champs), ...]} -- une seule fois par node"""
     banque = {}
     for i, node in enumerate(sorted(nodes), 1):
         n = coords.loc[node]
         entrees = []
         for _ in range(essais):
             lat, lon = position_autour(float(n["Latitude"]), float(n["Longitude"]), rng)
-            adr = None if sans_reseau else adresse_depuis_coords(lat, lon)
-            if not adr:
-                adr = f"pres de {n['lieu_reconnu']}, {n['Region']}, Tunisie"
-            entrees.append((lat, lon, adr, qualite(adr)))
+            champs = None if sans_reseau else lieu_depuis_coords(lat, lon)
+            if not champs or not champs.get("gouvernorat"):
+                champs = {"gouvernorat": n["Region"], "localite": n["lieu_reconnu"]}
+            entrees.append((lat, lon, champs))
         banque[node] = entrees
         if i % 25 == 0:
-            print(f"  banque d'adresses : {i}/{len(nodes)} nodes...")
+            print(f"  banque de lieux : {i}/{len(nodes)} nodes...")
     return banque
 
 
-def tirer_adresse(banque, node, rng, part_rue):
-    """une entree de la banque ; on privilegie une voie nommee dans part_rue des cas"""
+def tirer_lieu(banque, node, rng, cible):
+    """une entree de la banque, en privilegiant celles qui atteignent le niveau vise"""
     entrees = banque[node]
-    rues = [e for e in entrees if e[3] == 2]
-    if rues and rng.random() < part_rue:
-        return rng.choice(rues)
-    return rng.choice(entrees)
+    ok = [e for e in entrees if niveau_de(e[2]) == cible]
+    return rng.choice(ok or entrees)
 
 
 def main():
@@ -185,24 +186,24 @@ def main():
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--essais", type=int, default=4,
                     help="adresses candidates par node dans la banque")
-    ap.add_argument("--part-rue", type=float, default=0.7,
-                    help="proportion de tickets recevant une adresse au niveau rue")
+    ap.add_argument("--parts-niveau", default="0.55,0.25,0.13,0.07",
+                    help="proportions visees pour " + ",".join(NIVEAUX))
     ap.add_argument("--rayon", type=float, default=2.0, help="rayon pour n_nodes_proches")
     ap.add_argument("--sans-reseau", action="store_true")
-    ap.add_argument("--out", default="resultats/tickets_synthetiques.csv")
-    ap.add_argument("--positions", default="resultats/positions_reelles.csv")
+    ap.add_argument("--out", default=TICKETS)
+    ap.add_argument("--positions", default=POSITIONS_REELLES)
     args = ap.parse_args()
 
     rng = random.Random(args.seed)
-    coords = pd.read_csv(COORDS_PATH).set_index("Node")
+    coords = pd.read_csv(NODES_COORDS).set_index("Node")
 
     # --------------------------------------------------------- anomalies
-    aj = pd.read_csv(AJ_PATH)
+    aj = pd.read_csv(ANOMALIES_JOURNALIERES)
     aj = aj[aj["Node"].isin(coords.index)].copy()
     aj["familles"] = aj["kpis_en_cause"].map(familles_de)
     aj["n_fam"] = aj["familles"].map(len)
 
-    cc = pd.read_csv(CC_PATH)
+    cc = pd.read_csv(CELLULES_CHRONIQUES)
     cc = cc[cc["Node"].isin(coords.index)].copy()
     cc["familles"] = cc["kpis_en_cause"].map(familles_de)
 
@@ -277,32 +278,35 @@ def main():
     tk = pd.DataFrame(lignes).sample(frac=1, random_state=args.seed).reset_index(drop=True)
     tk.insert(0, "ticket_id", range(1, len(tk) + 1))
 
-    # ------------------------------------------------------------- adresses
-    print(f"\nbanque d'adresses ({tk['vrai_node'].nunique()} nodes, "
+    # ------------------------------------------------------------ localisation
+    print(f"\nbanque de lieux ({tk['vrai_node'].nunique()} nodes, "
           f"{args.essais} candidats chacun)...")
-    banque = banque_adresses(set(tk["vrai_node"]), coords, rng, args.essais, args.sans_reseau)
+    banque = banque_lieux(set(tk["vrai_node"]), coords, rng, args.essais, args.sans_reseau)
 
+    poids = [float(x) for x in args.parts_niveau.split(",")]
     lat_n, lon_n = coords["Latitude"].to_numpy(), coords["Longitude"].to_numpy()
     infos = []
-    for _, t in tk.iterrows():
-        lat, lon, adr, q = tirer_adresse(banque, t["vrai_node"], rng, args.part_rue)
+    for node in tk["vrai_node"]:
+        cible = rng.choices(NIVEAUX, weights=poids)[0]
+        lat, lon, champs = tirer_lieu(banque, node, rng, cible)
+        champs = degrader(champs, cible)
         d = haversine(lat, lon, lat_n, lon_n)
         infos.append({"client_lat": round(lat, 6), "client_lon": round(lon, 6),
-                      "adresse": adr, "precision_adresse": NIVEAUX[q],
+                      **{c: champs.get(c) for c in CHAMPS_LIEU},
+                      "precision_adresse": niveau_de(champs),
                       "n_nodes_proches": int((d <= args.rayon).sum())})
     info = pd.DataFrame(infos)
 
     # la position reelle ne va PAS dans les tickets : la jointure doit geocoder
-    pos = pd.concat([tk[["ticket_id"]], info[["client_lat", "client_lon"]],
-                     info[["adresse"]]], axis=1)
-    pos.to_csv(args.positions, index=False, encoding="utf-8")
+    pos = pd.concat([tk[["ticket_id"]], info[["client_lat", "client_lon"]]], axis=1)
+    pos.to_csv(prevoir(args.positions), index=False, encoding="utf-8")
 
     out = pd.concat([tk, info.drop(columns=["client_lat", "client_lon"])], axis=1)
     out = out[["ticket_id", "date", "texte_plainte", "vrai_node", "vraie_cellule",
                "vrai_kpi_principal", "vrais_kpis_en_cause", "categorie_attendue",
                "difficulte", "est_positif", "source",
-               "adresse", "precision_adresse", "n_nodes_proches"]]
-    out.to_csv(args.out, index=False, encoding="utf-8")
+               *CHAMPS_LIEU, "precision_adresse", "n_nodes_proches"]]
+    out.to_csv(prevoir(args.out), index=False, encoding="utf-8")
 
     # ------------------------------------------------------------------ recap
     print(f"\n{len(out)} tickets -> {args.out}")
@@ -310,7 +314,7 @@ def main():
     print(f"\npositifs {int(out.est_positif.sum())} | negatifs {int((~out.est_positif).sum())}")
     print("\npar difficulte :")
     print(out.difficulte.value_counts().to_string())
-    print("\nprecision des adresses :")
+    print("\nprecision de la localisation :")
     print(out.precision_adresse.value_counts().to_string())
     print(f"\ntextes distincts : {out.texte_plainte.nunique()} "
           f"(le cache LLM est indexe par texte)")

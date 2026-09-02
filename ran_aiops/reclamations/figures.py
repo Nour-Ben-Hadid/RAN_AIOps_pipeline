@@ -3,10 +3,11 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-import jointure_anomalies as J
-from commun import charger_tickets
+import ran_aiops.reclamations.jointure as J
+from ran_aiops.chemins import FIGURES
+from ran_aiops.commun.tickets import charger_tickets
 
-OUT = "resultats/figures"
+OUT = FIGURES
 
 # palette validee (validate_palette.js, mode clair : tous les tests passent)
 BLEU, ORANGE = "#2a78d6", "#eb6834"
@@ -28,12 +29,11 @@ def evaluer(tk, anom, rayon, k):
     """(taux de restitution du site en %, secteurs a inspecter par piste remontee)"""
     bons = nref = 0
     secteurs = pistes = 0
-    for x in tk.itertuples():
-        t = {"cat_eff": x.cat_eff, "adresse": x.adresse, "date": x.date}
-        node, sect, _, _ = J.localiser_detail(t, anom, 0, rayon, k)
-        if x.est_positif:                      # reference connue -> restitution mesurable
+    for t in tk.to_dict("records"):
+        node, sect, _, _, _ = J.localiser_detail(t, anom, 0, rayon, k)
+        if t["est_positif"]:                   # reference connue -> restitution mesurable
             nref += 1
-            bons += node == x.vrai_node
+            bons += node == t["vrai_node"]
         if node is not None:                   # cout paye sur TOUT le jeu
             pistes += 1
             secteurs += len(sect)
@@ -116,7 +116,7 @@ def progression(etapes, fichier):
 
 
 def main():
-    os.makedirs(OUT, exist_ok=True)
+    OUT.mkdir(parents=True, exist_ok=True)
     tk = charger_tickets()
     anom = J.charger_anomalies()
 

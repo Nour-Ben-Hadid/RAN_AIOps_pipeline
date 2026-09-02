@@ -5,7 +5,8 @@ from sklearn.model_selection import StratifiedKFold
 import os
 os.environ["HF_HUB_OFFLINE"] = "1"
 from sentence_transformers import SentenceTransformer
-from commun import est_correct, TICKETS
+from ran_aiops.chemins import PRED_EMBEDDINGS, TICKETS, prevoir
+from ran_aiops.commun.texte import est_correct
 
 
 MODELE = "OrdalieTech/Solon-embeddings-large-0.1"
@@ -81,7 +82,7 @@ def predire_cv(sims, cats, attendu, strate):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--tickets", default=TICKETS)
-    ap.add_argument("--out", default="resultats/predictions_embeddings.csv")
+    ap.add_argument("--out", default=PRED_EMBEDDINGS)
     args = ap.parse_args()
 
     df = pd.read_csv(args.tickets)

@@ -1,22 +1,30 @@
+"""Point d'entree unitaire : une plainte en argument -> node, secteurs et KPI en cause.
+
+Usage : python -m ran_aiops.reclamations.pipeline --texte "..." --date ... --gouvernorat ...
+"""
+
 import argparse
 import sys
 
 import pandas as pd
 
-from classification_llm_api import construire_prompt, appeler_gemini, extraire_json, MODELE
-from commun import cle_api, SEUIL_CONFIANCE
-from geocode_adresse import geocoder_adresse
-from jointure_anomalies import (charger_anomalies, localiser_detail,
-                                K_NODES, RAYON_KM)
+from ran_aiops.commun.env import cle_api
+from ran_aiops.commun.gemini import MODELE, appeler_gemini
+from ran_aiops.commun.tickets import SEUIL_CONFIANCE
+from ran_aiops.reclamations.classification_llm import construire_prompt, extraire_json
+from ran_aiops.reclamations.jointure import (CHAMPS_LIEU, K_NODES, RAYON_KM,
+                                             charger_anomalies, localiser_detail)
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--texte", required=True, help="texte de la plainte")
     ap.add_argument("--date", required=True, help="date de la panne (JJ/MM/AAAA ou AAAA-MM-JJ)")
-    ap.add_argument("--adresse", required=True, help="adresse complete du client")
-    ap.add_argument("--code-postal", default=None,
-                    help="optionnel, 4 chiffres : leve les homonymes de rue (tres recommande)")
+    ap.add_argument("--gouvernorat", required=True, help="seul champ obligatoire")
+    ap.add_argument("--delegation", default=None)
+    ap.add_argument("--localite", default=None)
+    ap.add_argument("--adresse-libre", default=None, help="rue ou repere, optionnel")
+    ap.add_argument("--code-postal", default=None, help="optionnel, 4 chiffres")
     ap.add_argument("--fenetre", type=int, default=0)
     ap.add_argument("--rayon", type=float, default=RAYON_KM,
                     help="rayon maximum de recherche en km")
@@ -35,9 +43,9 @@ def main():
     cat, conf = extraire_json(brut)
     conf = conf if conf is not None else 0.0
 
+    lieu = {c: getattr(args, c) for c in CHAMPS_LIEU}
     print(f"Plainte : \"{args.texte}\"")
-    print(f"Date : {date} | Adresse : {args.adresse}"
-          + (f" ({args.code_postal})" if args.code_postal else ""))
+    print(f"Date : {date} | Lieu : " + ", ".join(v for v in lieu.values() if v))
     print("-" * 60)
     print(f"Categorie (LLM) : {cat}  (confiance {conf:.2f})")
 
@@ -46,31 +54,21 @@ def main():
         print("-> Demande hors reseau (facturation / SIM / forfait). Aucun site a verifier.")
         return
 
-    # 2. adresse -> position du client
-    pos = geocoder_adresse(args.adresse, args.code_postal)
-    if pos is None:
-        print("-" * 60)
-        print(f"Adresse introuvable : \"{args.adresse}\"")
-        print("Precise la ville et, si possible, le code postal (--code-postal).")
-        print("Exemple : --adresse \"Avenue Habib Bourguiba, Sousse\" --code-postal 4000")
-        sys.exit(2)
-    print(f"Position : {pos[0]:.5f}, {pos[1]:.5f}  ({args.k} sites candidats, max {args.rayon} km)")
-
-    # 3. jointure avec les anomalies KPI
+    # 2. localisation puis jointure avec les anomalies KPI
     cat_eff = cat if conf >= SEUIL_CONFIANCE else "INDETERMINE"
-    # la jointure regeocode l'adresse, mais le cache est deja rempli par l'appel ci-dessus
-    ticket = {"cat_eff": cat_eff, "adresse": args.adresse,
-              "code_postal": args.code_postal, "date": date}
-    node, secteurs, kpis, dist = localiser_detail(
+    ticket = {"cat_eff": cat_eff, "date": date, **lieu}
+    node, secteurs, kpis, dist, niveau = localiser_detail(
         ticket, charger_anomalies(), args.fenetre, args.rayon, args.k)
+    print(f"Precision de la localisation : {niveau}")
 
     print("-" * 60)
     if node is None:
-        print("Aucune anomalie reseau trouvee autour de cette adresse a cette date.")
+        print("Aucune anomalie reseau trouvee autour de ce lieu a cette date.")
         print("(probleme peut-etre cote client, ou anomalie non detectee)")
     else:
+        proximite = "region" if dist is None else f"a {dist:.2f} km du client"
         print("PROBLEME A VERIFIER")
-        print(f"  Site      : {node}  (a {dist:.2f} km du client)")
+        print(f"  Site      : {node}  ({proximite})")
         print(f"  Secteurs  : {', '.join(secteurs)}")
         print(f"  KPI       : {', '.join(kpis)}")
 

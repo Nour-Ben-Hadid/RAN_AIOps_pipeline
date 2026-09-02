@@ -1,38 +1,21 @@
 # secrets
 .env
 
-# donnees et sorties (volumineuses / regenerables)
+# donnees d'entree (volumineuses, non redistribuables)
 data/
-reclamations/resultats/
-anomalies/resultats_anomalies/
-anomalies/resultats_anomalies_*/
+
+# sorties de toutes les etapes : caches LLM, CSV, figures -- toutes regenerables
+resultats/
+# la base de connaissance (base_connaissance/) et le code (ran_aiops/) sont versionnes
 
 # python
 __pycache__/
 *.py[cod]
-*.egg-info/
-.pytest_cache/
-.mypy_cache/
 venv/
-.venv/
 
-# notebooks
+# jupyter (notebooks/RAN_anomalies.ipynb)
 .ipynb_checkpoints/
 
-# latex (artefacts de compilation)
-*.aux
-*.bbl
-*.blg
-*.fdb_latexmk
-*.fls
-*.lof
-*.lot
-*.out
-*.synctex.gz
-*.toc
-rapport_complet.pdf
+# configuration d'editeur (locale, propre a chaque poste)
+.vscode/
 
-# divers
-*.log
-.DS_Store
-Thumbs.db
