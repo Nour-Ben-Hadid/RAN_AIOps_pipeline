@@ -9,19 +9,23 @@ ENV = RACINE / ".env"
 DATA = RACINE / "data"
 BASE_CONNAISSANCE = RACINE / "base_connaissance"
 
-KPI_TABLE = DATA / "KPI Table(1).csv"
+# reclamations recues : donnee primaire, ni regenerable ni versionnee
+BASE_RECLAMATIONS = RACINE / "reclamations.db"
+
+KPI_TABLE = DATA / "kpi_endc_journalier.csv"
 NODES_COORDS = DATA / "nodes_coordonnees.csv"
 LIEUX_TUNISIE = DATA / "lieux_tunisie.txt"
 CACHE_GEOCODAGE_LIEUX = DATA / "geocode_lieux_cache.json"
-CACHE_GEOCODAGE_NODES = DATA / "geocode_cache.json"
 
 # ---------------------------------------------------------------- sorties
 RESULTATS = RACINE / "resultats"
+CACHE_LLM = RESULTATS / "cache_llm.json"
 
 # etape 1 : detection d'anomalies (notebook)
 ANOMALIES = RESULTATS / "anomalies"
 ANOMALIES_JOURNALIERES = ANOMALIES / "anomalies_journalieres.csv"
 CELLULES_CHRONIQUES = ANOMALIES / "cellules_chroniques.csv"
+CELLULES_HISTORIQUE_COURT = ANOMALIES / "cellules_historique_insuffisant.csv"
 
 # etapes 2-4 : reclamations, classification, localisation
 RECLAMATIONS = RESULTATS / "reclamations"
@@ -38,7 +42,6 @@ FIGURES = RECLAMATIONS / "figures"
 RECOMMANDATION = RESULTATS / "recommandation"
 RECOMMANDATIONS = RECOMMANDATION / "recommandations.csv"
 EVALUATION = RECOMMANDATION / "evaluation_ab.csv"
-CACHE_RECOMMANDATION = RECOMMANDATION / "cache_llm.json"
 
 
 def prevoir(chemin):

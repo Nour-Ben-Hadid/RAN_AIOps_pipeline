@@ -27,6 +27,31 @@ son échec empêche tout usage, quel que soit l'état du reste du réseau.
 - Couverture / SINR dans la zone.
 - Seuils d'admission et licences.
 
+**Strategie de diagnostic.**
+- Distinguer l'acces radio initial, l'etablissement du bearer et l'acces au coeur. Une plainte
+  "impossible de se connecter" ne suffit pas a localiser la cause.
+- Si seul `Diff_Init_E-Rab_Establish_Succ_Rate (%)` est degrade, commencer par l'etablissement
+  E-RAB sur les secteurs candidats : tentatives, succes, rejets, cause de rejet et timeouts.
+- Si des KPI EN-DC setup sont aussi touches, separer le probleme LTE/E-RAB du probleme d'ajout 5G :
+  l'E-RAB peut echouer avant meme que la jambe NR soit pertinente.
+- Une anomalie d'accessibilite localisee sur un seul secteur pointe vers radio/config/admission
+  locale ; une anomalie sur plusieurs secteurs du meme node pointe plutot vers transport, coeur,
+  energie, synchro ou surcharge globale.
+
+**Controles terrain et OSS/NMS.**
+- Verifier RACH/access si disponible, RRC setup, E-RAB setup, admission control et causes de rejet.
+- Controler PRB, utilisateurs connectes, PDCCH et saturation horaire du secteur.
+- Verifier S1/MME/S-GW, SCTP, GTP-U, transport IP, alarmes et resets du site.
+- Controler la qualite radio d'acces : RSRP, RSRQ, SINR, interference UL et couverture indoor.
+- Comparer le secteur avec les autres secteurs du meme node pour distinguer probleme local et
+  probleme site.
+
+**Consignes de generation.**
+- Citer le node, les secteurs et le KPI exact.
+- Employer "etablissement du service" ou "E-RAB setup" plutot que "debit faible".
+- Ne jamais affirmer une panne coeur, une licence manquante ou une saturation sans compteur ou
+  alarme : les presenter comme hypotheses a verifier.
+
 **Actions correctives types :**
 - Décongestionner (capacité, équilibrage de charge, réglage d'admission).
 - Corriger le transport / la signalisation.

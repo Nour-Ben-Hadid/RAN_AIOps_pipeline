@@ -72,7 +72,7 @@ def charger_cache(chemin):
 def sauver_cache(chemin, cache):
     if not chemin:
         return
-    with open(chemin, "w", encoding="utf-8", newline="") as f:
+    with open(prevoir(chemin), "w", encoding="utf-8", newline="") as f:
         w = csv.writer(f)
         w.writerow(["texte_plainte", "pred_llm", "confiance"])
         for t, (c, conf) in cache.items():
@@ -127,7 +127,7 @@ def main():
         lignes.append({"ticket_id": r["ticket_id"], "pred_llm": cat, "confiance": conf})
 
     out = pd.DataFrame(lignes)
-    out.to_csv(args.out, index=False)
+    out.to_csv(prevoir(args.out), index=False)
     print(f"\n{len(out)} predictions -> {args.out}")
     if echecs:
         print(f"ATTENTION : {echecs} appels ont echoue (ECHEC_APPEL), relance le script.")

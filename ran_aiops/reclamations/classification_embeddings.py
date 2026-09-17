@@ -117,7 +117,7 @@ def main():
     print(
         f"\nAbstentions (INDETERMINE) : {(ev['pred_embed'] == 'INDETERMINE').sum()} / {len(ev)}")
 
-    ev[["ticket_id", "pred_embed", "similarite"]].to_csv(args.out, index=False)
+    ev[["ticket_id", "pred_embed", "similarite"]].to_csv(prevoir(args.out), index=False)
     print(f"\nPredictions -> {args.out}")
 
 

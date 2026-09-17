@@ -1,73 +1,140 @@
-# Pipeline AIOps — réseau d'accès radio
+# RAN AIOps Pipeline
 
-Détection d'anomalies de performance RAN, corrélation avec les réclamations clients, et
-génération de recommandations pour l'ingénieur réseau.
+Prototype AIOps pour le reseau d'acces radio : detection d'anomalies KPI,
+correlation avec les reclamations client, puis generation de recommandations
+explicables pour l'ingenieur reseau.
 
-## Architecture
+Le projet est concu comme un outil d'aide a la decision. Les traitements
+techniques restent calcules par le pipeline ; le LLM sert uniquement a classifier
+les plaintes et a formuler un diagnostic lisible.
 
-```
-ran_aiops/                     le paquet Python — tout le code
-├── chemins.py                 point unique de vérité pour TOUS les chemins
-├── commun/                    partagé entre les étapes
-│   ├── env.py                 chargement du .env, clé API
-│   ├── gemini.py              appel HTTP à l'API Gemini
-│   ├── kpi.py                 taxonomie KPI → famille de dégradation
-│   ├── texte.py               normalisation de chaînes
-│   └── tickets.py             chargement des tickets + catégorie prédite
-├── reclamations/              étapes 2–4 : tickets, classification, localisation
-│   ├── lieux_tunisie.py       référentiel des lieux, correction orthographique
-│   ├── geocodage.py           adresse → coordonnées (Nominatim)
-│   ├── geocodage_nodes.py     géocodage du référentiel de nodes
-│   ├── classification_llm.py  catégorie de la plainte par LLM
-│   ├── classification_embeddings.py   même tâche, par plongements (comparaison)
-│   ├── comparaison.py         LLM vs plongements
-│   ├── generation_tickets.py  tickets synthétiques ancrés sur les anomalies
-│   ├── jointure.py            corrélation ticket → node + secteurs + KPI
-│   ├── figures.py             figures de réglage des paramètres
-│   └── pipeline.py            entrée unitaire : une plainte → un diagnostic
-└── recommandation/            étape 5 : RAG à récupération déterministe
-    ├── selection.py           désignation des fiches (déterministe, sans LLM)
-    ├── generation.py          prompt ancré + appel Gemini + JSON validé
-    └── evaluation.py          protocole A/B noté par LLM-juge
+## Fonctionnalites
 
-base_connaissance/             13 fiches Markdown : 9 KPI + 4 familles (versionnée)
-data/                          entrées brutes (ignorée par git)
-resultats/                     sorties de toutes les étapes (ignorée par git)
-├── anomalies/  reclamations/  recommandation/
-notebooks/                     RAN_anomalies.ipynb — étape 1, détection
+- Detection d'anomalies non supervisee sur les KPI EN-DC.
+- Identification des KPI contributeurs et des cellules chroniquement degradees.
+- Classification des reclamations par famille de degradation.
+- Localisation par adresse client, proximite geographique et coherence KPI/date.
+- Generation de recommandations par RAG a recuperation deterministe.
+- Interface Streamlit pour consulter les tickets, anomalies et recommandations.
+- Validation manuelle par l'ingenieur avec commentaire et decision.
+
+## Structure
+
+```text
+ran_aiops/
+  anomalies/          detection ECOD et sorties anomalies
+  commun/             chemins, base SQLite, API Gemini, taxonomie KPI
+  reclamations/       classification, geocodage, jointure, traitement tickets
+  recommandation/     selection des fiches, generation RAG, evaluation
+
+base_connaissance/    fiches Markdown KPI/familles utilisees par le RAG
+scripts/              outils hors pipeline, dont anonymisation
+notebooks/            exploration et validation experimentale
+app_streamlit.py      interface web pour l'ingenieur reseau
 ```
 
-## Principe : aucun chemin relatif
+Les donnees brutes, resultats generes, caches, bases SQLite et secrets sont
+ignores par Git.
 
-Tous les chemins vivent dans [`ran_aiops/chemins.py`](ran_aiops/chemins.py) et sont ancrés sur la
-racine du dépôt via `Path(__file__).resolve().parents[1]`. **Aucun script ne dépend du répertoire
-depuis lequel on le lance.** Les modules s'appellent avec `python -m`, toujours depuis la racine.
-
-## Utilisation
+## Installation
 
 ```bash
-# étape 1 : détection d'anomalies  →  notebooks/RAN_anomalies.ipynb
+python -m venv venv
+venv\Scripts\activate
+pip install -r requirements.txt
+```
 
-# étapes 2-4 : réclamations
-python -m ran_aiops.reclamations.generation_tickets
-python -m ran_aiops.reclamations.classification_llm
-python -m ran_aiops.reclamations.jointure
+Sous Linux/macOS :
 
-# étape 5 : recommandation
-python -m ran_aiops.recommandation.generation --n 10   # échantillon
-python -m ran_aiops.recommandation.generation --n 0    # tous les tickets corrélés
-python -m ran_aiops.recommandation.evaluation --n 8    # protocole A/B + LLM-juge
-
-# diagnostic unitaire d'une plainte
-python -m ran_aiops.reclamations.pipeline \
-    --texte "ca coupe des que je prends la voiture" \
-    --date 2026-06-25 --gouvernorat Monastir
+```bash
+source venv/bin/activate
+pip install -r requirements.txt
 ```
 
 ## Configuration
 
-Un fichier `.env` à la racine, jamais versionné :
+Creer un fichier `.env` a la racine :
 
-```
+```text
 GEMINI_API_KEY=votre_cle
 ```
+
+Fichiers d'entree attendus dans `data/` :
+
+```text
+data/kpi_endc_journalier.csv
+data/nodes_coordonnees.csv
+data/lieux_tunisie.txt
+```
+
+`data/` n'est pas versionne. Chaque utilisateur doit fournir ses propres
+donnees ou des donnees anonymisees.
+
+## Execution
+
+Detection d'anomalies :
+
+```bash
+python -m ran_aiops.anomalies.detection
+```
+
+Generation de tickets synthetiques pour evaluation :
+
+```bash
+python -m ran_aiops.reclamations.generation_tickets
+```
+
+Traitement d'un ticket en attente :
+
+```bash
+python -m ran_aiops.reclamations.traitement --en-attente
+```
+
+Ajouter une reclamation sans declencher le pipeline :
+
+```bash
+python -m ran_aiops.reclamations.traitement ^
+  --texte "la 5G est tres lente depuis ce matin" ^
+  --date 2026-06-25 ^
+  --gouvernorat Monastir
+```
+
+Generation de recommandations :
+
+```bash
+python -m ran_aiops.recommandation.generation --n 10
+```
+
+Interface web :
+
+```bash
+streamlit run app_streamlit.py
+```
+
+## Donnees synthetiques
+
+`ran_aiops/reclamations/generation_tickets.py` sert uniquement a evaluer et
+demonstrer la chaine de bout en bout lorsqu'aucun historique de reclamations
+reelles annotees n'est disponible. En production, les tickets doivent venir du
+systeme amont de l'operateur ou etre inseres dans `reclamations.db`.
+
+## Anonymisation
+
+Avant publication, anonymiser les noms de nodes :
+
+```bash
+python scripts/anonymize_nodes.py
+```
+
+Le script remplace les noms reels par des identifiants stables (`NODE_0001`,
+`NODE_0002`, etc.) et cree `node_mapping_private.csv`. Ce fichier de
+correspondance est ignore par Git et ne doit pas etre publie.
+
+Si des donnees sensibles ont deja ete poussees dans un depot distant, il faut
+egalement nettoyer l'historique Git avant publication.
+
+## Notes de securite
+
+- Ne pas versionner `.env`.
+- Ne pas versionner `data/`, `resultats/`, `reclamations.db` ou les caches LLM.
+- Verifier l'absence de donnees sensibles avant chaque push public.

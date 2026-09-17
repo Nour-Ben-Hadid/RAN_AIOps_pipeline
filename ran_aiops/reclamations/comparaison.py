@@ -72,7 +72,7 @@ def main():
         sous = ev[ev["ok_embed"].notna() & ev["ok_llm"].notna()]
         mcnemar(sous["ok_embed"], sous["ok_llm"], "embeddings", "LLM")
 
-    ev.to_csv(args.out, index=False)
+    ev.to_csv(prevoir(args.out), index=False)
     print(f"\nDetail par ticket -> {args.out}")
 
 

@@ -4,36 +4,37 @@ Usage : python -m ran_aiops.recommandation.generation --n 10
 """
 
 import argparse
-import hashlib
 import json
-import os
 import re
-import time
-from functools import cache
 
 import pandas as pd
-import requests
 
-from ran_aiops.chemins import (CACHE_RECOMMANDATION, JOINTURE, RECOMMANDATIONS, TICKETS,
-                               prevoir)
-from ran_aiops.commun.env import cle_api
-from ran_aiops.commun.gemini import MODELE, appeler_gemini
+from ran_aiops.chemins import JOINTURE, RECOMMANDATIONS, TICKETS, prevoir
+from ran_aiops.commun.gemini import MODELE, appeler_cache
 from ran_aiops.recommandation.selection import recuperer
 
 TEMPERATURE = 0.2
 CHAMPS = ["diagnostic", "cause_probable", "actions"]
 
 PROMPT = """Tu es ingenieur radio. Redige une recommandation pour un technicien terrain, a partir
-UNIQUEMENT du diagnostic calcule ci-dessous et des fiches de reference fournies.
+du diagnostic calcule ci-dessous et des fiches de reference fournies.
 
 Regles :
-- N'invente rien : chaque cause et chaque action doit provenir des fiches.
+- N'invente rien : chaque cause et chaque action doit etre supportee par les fiches ou par le
+  diagnostic calcule.
+- Personnalise la reponse : cite le node, les secteurs a inspecter et les KPI quand ils sont
+  disponibles.
+- Transforme les actions generiques des fiches en controles operationnels appliques au secteur ou
+  au node concerne.
+- Si une cause n'est pas prouvee par les donnees, formule-la comme une hypothese a verifier, pas
+  comme une certitude.
 - Si les fiches ne permettent pas de conclure, mets "information insuffisante" dans diagnostic
   et une liste actions vide.
 - Ne remets pas en cause le node ni les KPI : ils viennent d'un calcul, pas d'une supposition.
 - Reponds UNIQUEMENT par un objet JSON, sans texte autour, sans bloc de code.
 - Format exact : {{"diagnostic": "...", "cause_probable": "...", "actions": ["...", "..."]}}
-- Au plus 3 actions, de la plus prioritaire a la moins prioritaire.
+- Au plus 3 actions, de la plus prioritaire a la moins prioritaire. Chaque action doit viser le
+  secteur ou le node si cette information est fournie.
 
 DIAGNOSTIC CALCULE :
 {contexte}
@@ -53,19 +54,6 @@ def contexte_ticket(ticket):
     return "\n".join(f"- {k} : {v}" for k, v in lignes if pd.notna(v) and v)
 
 
-@cache
-def _cache():
-    if os.path.exists(CACHE_RECOMMANDATION):
-        with open(CACHE_RECOMMANDATION, encoding="utf-8") as f:
-            return json.load(f)
-    return {}
-
-
-def _sauver():
-    with open(prevoir(CACHE_RECOMMANDATION), "w", encoding="utf-8") as f:
-        json.dump(_cache(), f, ensure_ascii=False, indent=0)
-
-
 def _valider(brut):
     """objet JSON avec les 3 champs attendus, ou None"""
     m = re.search(r"\{.*\}", brut or "", re.DOTALL)
@@ -80,35 +68,11 @@ def _valider(brut):
     return {c: d[c] for c in CHAMPS}
 
 
-def appeler_cache(prompt, modele=MODELE, temperature=TEMPERATURE, pause=6.5):
-    """appel Gemini memoise par hash du prompt, avec backoff sur quota, incidents et coupures"""
-    cle = hashlib.sha1(f"{modele}|{temperature}|{prompt}".encode()).hexdigest()
-    cache = _cache()
-    if cle in cache:
-        return cache[cle]
-
-    for tentative in range(4):
-        try:
-            cache[cle] = appeler_gemini(prompt, cle_api(), modele, temperature)
-            _sauver()
-            time.sleep(pause)
-            return cache[cle]
-        except (requests.HTTPError, requests.Timeout, requests.ConnectionError) as e:
-            # timeout ou coupure reseau : pas de code HTTP, on retente aussi
-            code = getattr(e.response, "status_code", None)
-            if code is not None and code not in (429, 500, 502, 503):
-                raise
-            attente = pause * (2 ** tentative)
-            print(f"  {code or type(e).__name__}, nouvelle tentative dans {attente:.0f}s")
-            time.sleep(attente)
-    raise SystemExit("appels Gemini en echec : relance plus tard, le cache conserve l'acquis")
-
-
 def generer(ticket, fiches, modele=MODELE, gabarit=PROMPT):
     """recommandation JSON ancree sur les fiches ; None si la reponse est inexploitable"""
     prompt = gabarit.format(contexte=contexte_ticket(ticket),
                             fiches="\n\n---\n\n".join(t for _, t in fiches))
-    return _valider(appeler_cache(prompt, modele))
+    return _valider(appeler_cache(prompt, modele, TEMPERATURE))
 
 
 def recommander(ticket):

@@ -1,8 +1,15 @@
 # secrets
 .env
+node_mapping_private.csv
+*_mapping_private.csv
 
 # donnees d'entree (volumineuses, non redistribuables)
 data/
+
+# reclamations recues (donnee client)
+*.db
+*.db-wal
+*.db-shm
 
 # sorties de toutes les etapes : caches LLM, CSV, figures -- toutes regenerables
 resultats/
@@ -18,4 +25,3 @@ venv/
 
 # configuration d'editeur (locale, propre a chaque poste)
 .vscode/
-

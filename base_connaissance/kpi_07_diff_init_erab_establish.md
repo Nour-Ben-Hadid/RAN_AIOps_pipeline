@@ -23,6 +23,35 @@ Un E-RAB qui ne s'établit pas empêche l'accès au service data.
 - Couverture / SINR à l'accès dans la zone.
 - Seuils d'admission et licences.
 
+**Lecture 3GPP utile pour le diagnostic.**
+- L'E-RAB porte le service utilisateur dans E-UTRAN. Un echec d'etablissement initial signifie que
+  le reseau n'arrive pas a creer le bearer necessaire apres la signalisation d'acces.
+- Ce KPI est un indicateur d'accessibilite service, different d'un simple probleme de debit :
+  l'utilisateur peut percevoir "internet ne demarre pas", "connexion impossible" ou "service
+  indisponible".
+- Les causes doivent etre separees entre radio/access/admission cote eNB et signalisation coeur
+  EPC cote S1/MME/S-GW. Sans compteur de cause, ne pas conclure trop vite.
+
+**Controles operationnels a demander.**
+- Sur le node/secteur indique, extraire les tentatives, succes, rejets et echecs d'E-RAB setup,
+  avec cause si disponible : admission, radio resource unavailable, transport, MME/S-GW, timeout,
+  QoS/bearer.
+- Verifier la charge de la cellule LTE : PRB DL/UL, RRC connected users, PDCCH, admission control,
+  congestion horaire et comparaison avec les jours precedents.
+- Controler l'etat de l'interface S1 et des noeuds coeur associes : MME/S-GW reachability, SCTP,
+  GTP-U, pertes, latence, resets et alarmes.
+- Verifier la qualite radio a l'acces : RSRP/RSRQ/SINR, interference UL, puissance UE, Random
+  Access/RACH si disponible et couverture indoor.
+- Controler la configuration bearer/QoS : QCI/5QI mappe, ARP, politiques d'admission, licences,
+  restrictions cellule et incoherences de configuration.
+
+**Actions formulees pour le technicien.**
+- Citer le secteur cible et orienter l'action vers l'etablissement E-RAB, pas vers la retenabilite
+  ou la mobilite.
+- Proposer de trier les echecs par cause NMS avant tout reglage radio.
+- Si les causes S1/EPC ne sont pas visibles, recommander une verification coordonnee radio + coeur,
+  sans affirmer que le coeur est fautif.
+
 **Actions correctives types :**
 - Décongestionner (capacité, équilibrage, réglage d'admission).
 - Corriger le transport S1 / la signalisation vers le cœur.

@@ -29,6 +29,35 @@ entre les deux nœuds.
 - Charge de l'eNB ; capacités EN-DC des terminaux dans la zone.
 - Définition des cellules 5G voisines côté eNB.
 
+**Lecture 3GPP utile pour le diagnostic.**
+- Cote eNB, la procedure EN-DC depend du Master Node : mesures UE, decision d'ajout du Secondary
+  Node, preparation du SgNB Addition et transfert de configuration RRC vers l'UE.
+- Une degradation cote eNB peut venir d'un mauvais declenchement des mesures NR, d'un voisinage
+  LTE-NR incomplet, d'une incoherence de configuration avec le gNB, d'un probleme X2 ou d'une
+  surcharge/admission cote noeud maitre.
+- L'evenement B1 de mesure inter-RAT sert typiquement a detecter qu'une cellule NR devient assez
+  bonne pour declencher l'ajout. Des seuils trop stricts empechent l'ajout ; des seuils trop
+  permissifs peuvent declencher trop tot et produire des echecs.
+
+**Controles operationnels a demander.**
+- Sur le secteur LTE indique, verifier la configuration des mesures NR : B1, seuils, hysteresis,
+  Time-To-Trigger, frequences NR surveillees et liste des cellules NR voisines.
+- Comparer les compteurs EN-DC setup cote eNB et cote gNB : si les demandes partent mais echouent
+  cote gNB, basculer l'analyse vers la cellule NR ; si les demandes ne partent pas, analyser la
+  decision cote eNB et les mesures UE.
+- Controler la relation X2 eNB-gNB : etat administratif/operationnel, timeouts de preparation,
+  erreurs de configuration, latence ou pertes transport.
+- Verifier les capacites UE et politiques d'activation EN-DC : terminaux compatibles, feature
+  activee, restrictions par cellule, licences et admission.
+- Croiser avec la charge LTE : PRB, RRC connected, PDCCH, rejets admission, car un eNB sature peut
+  refuser ou retarder l'ajout du Secondary Node.
+
+**Actions formulees pour le technicien.**
+- Citer le secteur LTE cible et demander explicitement le controle du voisinage LTE-NR associe.
+- Employer des formulations conditionnelles : "si les compteurs montrent des timeouts X2",
+  "si les mesures B1 ne sont pas declenchees", "si la cellule NR cible est saturee".
+- Ne pas conclure a un terminal incompatible sans distribution UE/capability ou traces RRC.
+
 **Actions correctives types :**
 - Réparer / rétablir l'interface X2 ; corriger la signalisation.
 - Ajuster le seuil B1 pour déclencher l'ajout au bon niveau de qualité 5G.

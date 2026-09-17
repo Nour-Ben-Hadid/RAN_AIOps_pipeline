@@ -1,5 +1,8 @@
-"""Genere les tickets synthetiques a partir des anomalies detectees.
-A relancer a chaque changement de detecteur : les tickets figent la verite terrain.
+"""Genere des tickets synthetiques pour l'evaluation et la demonstration.
+
+Ce script n'est pas un flux de collecte de reclamations en production. Il sert a tester la chaine
+de bout en bout en l'absence de reclamations reelles annotees. A relancer a chaque changement de
+detecteur : les tickets figent la verite terrain de l'evaluation.
 """
 
 import argparse

@@ -26,6 +26,38 @@ cellule 5G refuse ou n'aboutit pas les ajouts EN-DC.
 - État de l'interface X2/F1 et alarmes matérielles/transport du site.
 - Seuils et compteurs du contrôle d'admission ; état des licences EN-DC.
 
+**Lecture 3GPP utile pour le diagnostic.**
+- La procedure de Secondary Node Addition est initiee par le Master Node et sert a etablir le
+  contexte UE au Secondary Node afin d'allouer des ressources NR/SCG. Cote gNB, un echec pointe
+  d'abord vers l'allocation de ressources, la configuration SCG, la cellule NR cible ou le dialogue
+  de signalisation avec le Master Node.
+- Ne pas assimiler automatiquement ce KPI a un debit radio faible : il mesure l'acces a la jambe
+  5G secondaire. Le debit client baisse parce que la 5G n'est pas ajoutee ou reste indisponible,
+  mais la cause initiale peut etre admission, couverture, configuration ou transport.
+- Si `EN_DC_SETUP_succ_RATE_eNB` est bon et que seul le KPI gNB chute, privilegier une hypothese
+  localisee cote gNB/NR. Si les deux KPI chutent ensemble, verifier la signalisation eNB-gNB et la
+  coherence de configuration entre les deux noeuds.
+
+**Controles operationnels a demander.**
+- Sur le node et les secteurs donnes par le diagnostic, extraire les compteurs de demande,
+  acceptation, rejet et echec de SgNB Addition, avec repartition par cause si le NMS la fournit
+  (admission, radio, transport, timeout, configuration).
+- Verifier la charge NR du secteur : PRB DL/UL, utilisateurs actifs, RRC/UE contexts, ressources
+  PDCCH/PUCCH si disponibles, et comparer avec les heures normales de la meme cellule.
+- Controler la qualite radio NR autour du secteur : RSRP, RSRQ, SINR, beam/SSB dominant,
+  couverture indoor/outdoor, et coherences PCI/SSB/ARFCN.
+- Verifier les alarmes gNB, DU/CU/F1 si architecture split, synchro/PTP, transport IP et pertes ou
+  latence sur le chemin eNB-gNB.
+- Controler la configuration EN-DC : cellule NR autorisee, mapping eNB-gNB, voisinage LTE-NR,
+  options de bearer, licences/capacites et politiques d'admission.
+
+**Actions formulees pour le technicien.**
+- Citer explicitement le node et le secteur cible ; ne pas dire seulement "la cellule gNB".
+- Proposer de comparer les compteurs `attempt/success/reject/failure` de SgNB Addition avant et
+  pendant l'anomalie, puis d'isoler la cause dominante.
+- Si aucune alarme ou compteur de cause n'est fourni, ecrire "hypothese a verifier" pour congestion,
+  defaut transport ou couverture NR.
+
 **Actions correctives types :**
 - Soulager la congestion (ajout de capacité, équilibrage de charge, réglage des seuils d'admission).
 - Optimiser la couverture 5G (tilt, azimut, puissance) si la radio SCG est faible.

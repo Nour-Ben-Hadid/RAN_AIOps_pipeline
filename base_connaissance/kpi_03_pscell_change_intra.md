@@ -21,6 +21,38 @@ changement inter-gNB (pas de dépendance à une interface X2 entre gNB distincts
 - Définition des cellules PSCell voisines au sein du gNB.
 - Couverture / SINR 5G aux zones de recouvrement.
 
+**Lecture 3GPP utile pour le diagnostic.**
+- Le PSCell Change est une reconfiguration synchronisee de la liaison SCG vers une nouvelle
+  cellule primaire secondaire. En intra-gNB, la procedure reste dans le meme Secondary Node : la
+  signalisation inter-noeuds est moins critique que la qualite radio, le choix de cible et les
+  parametres de mobilite SCG.
+- Une chute du taux de succes signifie que l'UE n'arrive pas de maniere fiable a terminer le
+  changement vers la PSCell cible. Les causes a separer sont : declenchement trop tardif,
+  declenchement trop tot, mauvais choix de PSCell cible, echec de random access sur la cible,
+  frontiere de couverture ou interference NR.
+- Si ce KPI est degrade sans degradation LTE, la mobilite de l'ancre 4G peut rester correcte tandis
+  que la jambe 5G secondaire est instable.
+
+**Controles operationnels a demander.**
+- Sur le node et les secteurs indiques, verifier les relations de voisinage NR intra-gNB :
+  cellules source/cible, PCI, SSB/beam, ARFCN, priorites et coherences de configuration.
+- Extraire les compteurs de PSCell Change : tentatives, succes, echecs de preparation,
+  echecs d'execution, echecs de random access et timers expires si disponibles.
+- Controler les parametres de mobilite SCG : seuils de declenchement, offsets source/cible,
+  hysteresis, Time-To-Trigger, T304 ou timer equivalent de reconfiguration synchronisee.
+- Analyser la qualite NR sur les zones de recouvrement : RSRP/RSRQ/SINR, interference, beams
+  dominants et trous de couverture entre source et cible.
+- Comparer les echecs par couple source-cible pour detecter une cible unique mal configuree ou
+  un probleme general de parametrage.
+
+**Actions formulees pour le technicien.**
+- Nommer le secteur source ou candidat fourni par le diagnostic et demander une verification
+  source-cible, pas seulement "optimiser la mobilite".
+- Pour une plainte en deplacement, recommander une trace RRC/drive test sur la frontiere entre
+  cellules du meme gNB.
+- Presenter "too late", "too early" ou "wrong PSCell" comme hypotheses de MRO a confirmer par
+  mesures UE/traces, pas comme conclusions automatiques.
+
 **Actions correctives types :**
 - Ajuster les seuils et hystérésis de changement de PSCell.
 - Compléter/corriger les relations de voisinage intra-gNB.

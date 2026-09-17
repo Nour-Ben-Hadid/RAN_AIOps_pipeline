@@ -23,6 +23,35 @@ la connectivité 5G secondaire ne dégrade pas le service porté par l'ancre 4G.
 - Niveau d'interférence et charge de la cellule.
 - Alarmes radio / transport.
 
+**Lecture 3GPP utile pour le diagnostic.**
+- La retenabilite E-RAB mesure la capacite a maintenir un bearer deja etabli. Elle doit etre lue
+  comme un probleme de coupure/drop, pas comme un probleme d'acces initial.
+- Les definitions KPI E-UTRAN distinguent l'accessibilite, la retenabilite, la mobilite et
+  l'integrite. Pour ce KPI, le diagnostic doit donc chercher pourquoi le service tombe apres avoir
+  commence : radio link failure, handover rate, interference, congestion ou transport.
+- Un mauvais E-RAB retainability peut etre une consequence d'echecs de mobilite LTE ; il faut le
+  croiser avec `Diff_Cell_Mobility_Succ_Rate_LTE (%)`.
+
+**Controles operationnels a demander.**
+- Sur le node/secteur indique, extraire les releases E-RAB normales/anormales avec cause si le NMS
+  l'expose : radio connection with UE lost, handover failure, transport, core network, inactivity
+  normale a exclure.
+- Verifier les indicateurs radio LTE : RSRP/RSRQ/SINR, interference UL/DL, BLER, RLC/HARQ
+  retransmissions, RLF, puissance UE et zones indoor/bord cellule.
+- Croiser avec la mobilite : taux de succes handover, preparation/execution HO, voisins manquants,
+  ping-pong, too-late/too-early handover.
+- Croiser avec la charge : PRB, utilisateurs actifs, PDCCH, congestion et degradation concentree
+  sur les heures de pointe.
+- Controler alarmes transport/radio, coupures energie, resets eNB et pertes S1/GTP-U si plusieurs
+  secteurs ou plusieurs KPI chutent en meme temps.
+
+**Actions formulees pour le technicien.**
+- Utiliser une formulation de type "coupures anormales du bearer sur le secteur X" plutot que
+  "probleme d'acces".
+- Prioriser les controles radio et handover si la plainte parle de coupures en cours d'usage.
+- Ne pas proposer de changement de seuil d'admission comme action principale sauf si les compteurs
+  montrent une congestion/admission.
+
 **Actions correctives types :**
 - Optimiser la couverture (tilt, azimut, puissance) et combler les trous.
 - Fiabiliser la mobilité (relations de voisinage, seuils de handover).
