@@ -1,4 +1,4 @@
-# Lightweight app image: Streamlit dashboard and online ticket processing.
+# Full project image: notebooks, offline ML stages, embeddings, evaluation, and Streamlit.
 FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -11,12 +11,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends build-essential \
+    && apt-get install -y --no-install-recommends build-essential git \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements-app.txt .
+COPY requirements.txt .
 RUN python -m pip install --upgrade pip \
-    && python -m pip install -r requirements-app.txt
+    && python -m pip install -r requirements.txt
 
 RUN useradd --create-home --shell /bin/bash appuser \
     && mkdir -p /app/data /app/resultats \
