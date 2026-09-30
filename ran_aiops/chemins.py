@@ -16,6 +16,7 @@ KPI_TABLE = DATA / "kpi_endc_journalier.csv"
 NODES_COORDS = DATA / "nodes_coordonnees.csv"
 LIEUX_TUNISIE = DATA / "lieux_tunisie.txt"
 CACHE_GEOCODAGE_LIEUX = DATA / "geocode_lieux_cache.json"
+TUNISIA_LOCATIONS = RACINE / "ran_aiops" / "reclamations" / "referentiels" / "tunisia_locations.json"
 
 # ---------------------------------------------------------------- sorties
 RESULTATS = RACINE / "resultats"

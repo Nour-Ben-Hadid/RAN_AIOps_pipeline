@@ -6,6 +6,7 @@ Run:
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pandas as pd
@@ -15,6 +16,7 @@ from ran_aiops.chemins import (
     ANOMALIES_JOURNALIERES,
     BASE_RECLAMATIONS,
     CELLULES_CHRONIQUES,
+    TUNISIA_LOCATIONS,
 )
 from ran_aiops.commun import base
 from ran_aiops.reclamations.traitement import traiter_ticket
@@ -185,6 +187,92 @@ def generer_recommandation_ticket(ticket_id: str):
     )
 
 
+@st.cache_data(show_spinner=False)
+def charger_referentiel_lieux() -> dict:
+    if not TUNISIA_LOCATIONS.exists():
+        return {"gouvernorats": [], "delegations": {}}
+
+    with TUNISIA_LOCATIONS.open(encoding="utf-8") as f:
+        data = json.load(f)
+
+    gouvernorats = [g["name"] for g in data.get("governorates", [])]
+    delegations = {
+        g["name"]: [d["name"] for d in g.get("delegations", [])]
+        for g in data.get("governorates", [])
+    }
+    return {
+        "gouvernorats": gouvernorats,
+        "delegations": delegations,
+    }
+
+
+def afficher_formulaire_nouveau_ticket():
+    with st.expander("Nouveau ticket", expanded=False):
+        texte_plainte = st.text_area("Plainte client", height=120, key="nouveau_ticket_plainte")
+        lieux = charger_referentiel_lieux()
+        option_vide = "Non renseigne"
+
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            date_plainte = st.date_input(
+                "Date de la plainte",
+                value=None,
+                format="YYYY-MM-DD",
+                key="nouveau_ticket_date",
+            )
+            gouvernorats = lieux["gouvernorats"]
+            gouvernorat = st.selectbox(
+                "Gouvernorat",
+                [""] + gouvernorats,
+                format_func=lambda valeur: "Choisir un gouvernorat" if not valeur else valeur,
+                key="nouveau_ticket_gouvernorat",
+            )
+        with c2:
+            delegations = lieux["delegations"].get(gouvernorat, [])
+            delegation = st.selectbox(
+                "Delegation",
+                [option_vide] + delegations,
+                disabled=not gouvernorat or not delegations,
+                key=f"nouveau_ticket_delegation_{gouvernorat or 'aucun'}",
+            )
+            delegation = None if delegation == option_vide else delegation
+            localite = st.text_input("Localite / secteur", key="nouveau_ticket_localite")
+        with c3:
+            adresse_libre = st.text_input("Adresse libre", key="nouveau_ticket_adresse")
+            code_postal = st.text_input("Code postal", key="nouveau_ticket_code_postal")
+
+        soumis = st.button("Enregistrer le ticket", type="primary")
+
+        if not soumis:
+            return
+
+        texte_plainte = texte_plainte.strip()
+        if not texte_plainte:
+            st.error("La plainte client est obligatoire.")
+            return
+        if not gouvernorat:
+            st.error("Le gouvernorat est obligatoire.")
+            return
+
+        def optionnel(valeur):
+            valeur = str(valeur or "").strip()
+            return valeur or None
+
+        ticket_id = base.enregistrer(
+            texte_plainte,
+            date_plainte.isoformat() if date_plainte else None,
+            gouvernorat=optionnel(gouvernorat),
+            delegation=delegation,
+            localite=optionnel(localite),
+            adresse_libre=optionnel(adresse_libre),
+            code_postal=optionnel(code_postal),
+        )
+        vider_cache()
+        st.session_state["ticket_selection"] = ticket_id
+        st.success(f"Ticket {ticket_id} enregistre.")
+        st.rerun()
+
+
 def vue_synthese(tickets: pd.DataFrame, anomalies: pd.DataFrame, chroniques: pd.DataFrame):
     st.title("RAN AIOps Console")
     st.caption("Interface rapide pour le suivi des tickets, anomalies KPI et recommandations LLM.")
@@ -227,6 +315,8 @@ def vue_synthese(tickets: pd.DataFrame, anomalies: pd.DataFrame, chroniques: pd.
 def vue_tickets(tickets: pd.DataFrame):
     st.title("Tickets")
     st.caption("Les nouvelles reclamations arrivent depuis la CLI ou le systeme amont.")
+
+    afficher_formulaire_nouveau_ticket()
 
     if tickets.empty:
         st.info("Aucun ticket a afficher.")
