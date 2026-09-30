@@ -19,6 +19,7 @@ from ran_aiops.chemins import (
     TUNISIA_LOCATIONS,
 )
 from ran_aiops.commun import base
+from ran_aiops.demo import ensure_demo_data
 from ran_aiops.reclamations.traitement import traiter_ticket
 from ran_aiops.recommandation.generation import recommander
 
@@ -543,6 +544,7 @@ def afficher_page_auto(page):
 
 
 def main():
+    ensure_demo_data()
     base.initialiser()
 
     st.sidebar.title("Navigation")
